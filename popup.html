@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Head In The Sand</title>
+    <script src="popup.js" defer></script>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 10px; width: 300px; }
+      #status { color: green; margin-top: 10px; }
+      textarea { width: 100%; }
+      button { margin-top: 5px; }
+    </style>
+  </head>
+  <body>
+    <h3>Head In The Sand</h3>
+    <label for="keywords">Blocked Keywords:</label><br>
+    <textarea id="keywords" rows="10" placeholder="Enter keywords separated by commas"></textarea><br>
+    <button id="save">Save</button>
+    <button id="export">Export</button>
+    <button id="import">Import</button>
+    <input type="file" id="importFile" accept=".txt" style="display:none;">
+    <p id="status"></p>
+  </body>
+</html>
