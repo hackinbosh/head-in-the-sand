@@ -9,6 +9,14 @@ chrome.storage.sync.get("blockedKeywords", ({ blockedKeywords }) => {
   console.log("Blocked Keywords:", blockedKeywords);
   console.log("Compiled Regex:", keywordRegex);
 
+  // Updated selectors for Reddit and X.com
+  const redditSelectors = [
+    "div[data-testid='post-container']",  // Reddit post container
+    "div[data-test-id='post']",            // Reddit post
+    "div.Post"                             // Generic Reddit post class as a fallback
+  ];
+  const twitterTweetSelector = "article div[data-testid='tweetText']";  // Specific to tweet content
+
   /**
    * Recursively searches for and blocks content containing specified keywords.
    * Traverses shadow DOMs to access content within web components.
@@ -35,14 +43,25 @@ chrome.storage.sync.get("blockedKeywords", ({ blockedKeywords }) => {
     }
   }
 
-  // Initial traversal and blocking
-  traverseAndBlock(document.body);
+  // Initial traversal and blocking on Reddit and Twitter
+  const initialRedditElements = document.querySelectorAll(redditSelectors.join(', '));
+  const initialTwitterElements = document.querySelectorAll(twitterTweetSelector);
+  initialRedditElements.forEach(element => traverseAndBlock(element));
+  initialTwitterElements.forEach(element => traverseAndBlock(element));
 
   // Set up MutationObserver to watch for new content
   const observer = new MutationObserver(mutations => {
     mutations.forEach(mutation => {
       mutation.addedNodes.forEach(node => {
-        traverseAndBlock(node);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          // Block newly added Reddit posts or tweets
+          if (node.matches(redditSelectors.join(', ')) || node.matches(twitterTweetSelector)) {
+            traverseAndBlock(node);
+          }
+
+          // Also check its children
+          traverseAndBlock(node);
+        }
       });
     });
   });
