@@ -4,88 +4,108 @@ chrome.storage.sync.get("blockedKeywords", ({ blockedKeywords }) => {
     return;
   }
 
-  // Combine keywords into a single regular expression for efficiency
-  const keywordRegex = new RegExp(blockedKeywords.join('|'), 'i');
+  // Compile keywords into a single regular expression
+  let keywordRegex = new RegExp(blockedKeywords.join('|'), 'i');
   console.log("Blocked Keywords:", blockedKeywords);
   console.log("Compiled Regex:", keywordRegex);
 
-  // Updated selectors for Reddit and X.com
-  const redditSelectors = [
-    "div[data-testid='post-container']",  // Reddit post container
-    "div[data-test-id='post']",            // Reddit post
-    "div.Post"                             // Generic Reddit post class as a fallback
+  // Define updated post and comment selectors for Reddit and X.com
+  const postSelectors = [
+    "div[data-testid='post-container']", // Reddit posts
+    "shreddit-post", // Reddit dynamic post component
+    "a[data-ks-id^='t3_']", // Reddit anchor links for posts
+    "article[data-testid='tweet']", // X.com tweets
+    "div.Post", // Generic fallback for Reddit posts
+    "div.css-1dbjc4n" // Generic class for X.com tweets
   ];
-  const twitterTweetSelector = "article div[data-testid='tweetText']";  // Specific to tweet content
 
-  /**
-   * Recursively searches for and blocks content containing specified keywords.
-   * Traverses shadow DOMs to access content within web components.
-   * @param {Node} node - The starting node for traversal.
-   */
-  function traverseAndBlock(node) {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      let textContent = node.innerText || node.textContent || '';
+  const commentSelectors = [
+    "div[data-testid='comment']", // Reddit comments
+    "shreddit-comment", // Reddit comment component
+    "div[role='article']", // X.com tweets/replies
+  ];
 
-      // Check if the element contains any of the blocked keywords
-      if (keywordRegex.test(textContent)) {
-        node.classList.add('hidden-by-extension');
-        console.log('Blocked element:', node);
-        return; // Stop further traversal as this node is blocked
-      }
+  // Function to log content to local storage
+  function logToFile(message) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${message}\n`;
 
-      // Traverse shadow DOM if present
-      if (node.shadowRoot) {
-        traverseAndBlock(node.shadowRoot);
-      }
-
-      // Traverse child nodes
-      node.childNodes.forEach(child => traverseAndBlock(child));
-    }
+    chrome.storage.local.get("logs", (result) => {
+      let logs = result.logs ? result.logs : "";
+      logs += logEntry;
+      chrome.storage.local.set({ logs: logs });
+    });
   }
 
-  // Initial traversal and blocking on Reddit and Twitter
-  const initialRedditElements = document.querySelectorAll(redditSelectors.join(', '));
-  const initialTwitterElements = document.querySelectorAll(twitterTweetSelector);
-  initialRedditElements.forEach(element => traverseAndBlock(element));
-  initialTwitterElements.forEach(element => traverseAndBlock(element));
+  /**
+   * Blocks content containing specified keywords.
+   * @param {NodeList|Array} elements - Elements to check.
+   * @param {RegExp} keywordRegex - Compiled regex of blocked keywords.
+   */
+  function blockContent(elements, keywordRegex) {
+    elements.forEach(element => {
+      if (keywordRegex.test(element.innerText)) {
+        const parentPost = element.closest(postSelectors.join(', '));
+        if (parentPost) {
+          parentPost.classList.add('hidden-by-extension');
+          logToFile(`Blocked Post: ${parentPost.outerHTML}`);
+        } else {
+          element.classList.add('hidden-by-extension');
+          logToFile(`Blocked Element: ${element.outerHTML}`);
+        }
+      }
+    });
+  }
 
-  // Set up MutationObserver to watch for new content
-  const observer = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          // Block newly added Reddit posts or tweets
-          if (node.matches(redditSelectors.join(', ')) || node.matches(twitterTweetSelector)) {
-            traverseAndBlock(node);
+  // Initial blocking on page load
+  const initialPosts = document.querySelectorAll(postSelectors.join(', '));
+  const initialComments = document.querySelectorAll(commentSelectors.join(', '));
+  blockContent(initialPosts, keywordRegex);
+  blockContent(initialComments, keywordRegex);
+
+  // Set up MutationObserver to monitor for dynamically added content
+  const observer = new MutationObserver((mutations) => {
+    const addedNodes = [];
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === 1) { // Only consider element nodes
+          if (node.matches(postSelectors.join(', ')) || node.matches(commentSelectors.join(', '))) {
+            addedNodes.push(node);
+          } else {
+            // If child nodes match post/comment selectors, add them too
+            node.querySelectorAll(postSelectors.join(', ') + ',' + commentSelectors.join(', ')).forEach(childNode => {
+              addedNodes.push(childNode);
+            });
           }
-
-          // Also check its children
-          traverseAndBlock(node);
         }
       });
     });
+    if (addedNodes.length > 0) {
+      blockContent(addedNodes, keywordRegex);
+    }
   });
 
+  // Observe mutations in the whole document body
   observer.observe(document.body, { childList: true, subtree: true });
-  console.log('MutationObserver initialized.');
+  console.log("MutationObserver initialized.");
 
-  // Listen for updates to keywords
+  // Update keywords if they change via the popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'updateKeywords') {
-      chrome.storage.sync.get('blockedKeywords', ({ blockedKeywords }) => {
+    if (request.action === "updateKeywords") {
+      chrome.storage.sync.get("blockedKeywords", ({ blockedKeywords }) => {
         if (!Array.isArray(blockedKeywords) || blockedKeywords.length === 0) {
-          console.log('No blocked keywords found after update.');
+          console.log("No blocked keywords found after update.");
           return;
         }
         keywordRegex = new RegExp(blockedKeywords.join('|'), 'i');
-        console.log('Blocked Keywords updated:', blockedKeywords);
-        console.log('New Compiled Regex:', keywordRegex);
-
-        // Re-run traversal to apply new keywords
-        traverseAndBlock(document.body);
+        console.log("Blocked Keywords updated:", blockedKeywords);
+        const allPosts = document.querySelectorAll(postSelectors.join(', '));
+        const allComments = document.querySelectorAll(commentSelectors.join(', '));
+        blockContent(allPosts, keywordRegex);
+        blockContent(allComments, keywordRegex);
       });
     }
   });
 
-  console.log('Head In The Sand content script loaded.');
+  console.log("Content script for 'Head In The Sand' loaded.");
 });

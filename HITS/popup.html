@@ -1,23 +1,18 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Head In The Sand</title>
+    <title>Head In The Sand - Blocker Configuration</title>
+    <link rel="stylesheet" href="popup.css">
     <script src="popup.js" defer></script>
-    <style>
-      body { font-family: Arial, sans-serif; padding: 10px; width: 300px; }
-      #status { color: green; margin-top: 10px; }
-      textarea { width: 100%; }
-      button { margin-top: 5px; }
-    </style>
   </head>
   <body>
-    <h3>Head In The Sand</h3>
-    <label for="keywords">Blocked Keywords:</label><br>
-    <textarea id="keywords" rows="10" placeholder="Enter keywords separated by commas"></textarea><br>
+    <h3>Head In The Sand - Custom Keyword Blocker</h3>
+    <label for="keywords">Blocked Keywords (comma separated):</label>
+    <textarea id="keywords" rows="10" cols="30" placeholder="Enter keywords to block..."></textarea>
     <button id="save">Save</button>
-    <button id="export">Export</button>
-    <button id="import">Import</button>
-    <input type="file" id="importFile" accept=".txt" style="display:none;">
-    <p id="status"></p>
+    <p id="message" class="hidden">Keywords saved successfully!</p>
+    <footer>
+      <small>Make social media bearable again - Head In The Sand.</small>
+    </footer>
   </body>
 </html>

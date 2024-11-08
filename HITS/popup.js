@@ -3,67 +3,89 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveButton = document.getElementById("save");
   const exportButton = document.getElementById("export");
   const importButton = document.getElementById("import");
-  const importFile = document.getElementById("importFile");
-  const status = document.getElementById('status');
+  const importFileInput = document.getElementById("importFile");
+  const exportLogsButton = document.getElementById("exportLogs");
+  const statusMessage = document.getElementById("status");
 
-  // Load existing keywords
+  // Load blocked keywords from Chrome storage and populate the textarea
   chrome.storage.sync.get("blockedKeywords", ({ blockedKeywords }) => {
-    keywordsTextArea.value = blockedKeywords ? blockedKeywords.join(", ") : '';
+    if (Array.isArray(blockedKeywords)) {
+      keywordsTextArea.value = blockedKeywords.join(", ");
+    } else {
+      keywordsTextArea.value = "";
+    }
   });
 
-  // Save new keywords
+  // Save new keywords to Chrome storage
   saveButton.addEventListener("click", () => {
-    const newKeywords = keywordsTextArea.value.split(",").map(kw => kw.trim()).filter(Boolean);
+    const newKeywords = keywordsTextArea.value.split(",").map(kw => kw.trim()).filter(kw => kw.length > 0);
     chrome.storage.sync.set({ blockedKeywords: newKeywords }, () => {
-      // Notify content script to update keywords
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0].id) {
-          chrome.tabs.sendMessage(tabs[0].id, { action: "updateKeywords" });
-        }
-      });
-      status.textContent = "Keywords updated successfully!";
-      setTimeout(() => { status.textContent = ''; }, 2000);
+      statusMessage.textContent = "Keywords updated successfully!";
+      statusMessage.style.color = "green";
+      setTimeout(() => {
+        statusMessage.textContent = "";
+      }, 3000);
     });
   });
 
   // Export keywords to a text file
-  exportButton.addEventListener('click', () => {
+  exportButton.addEventListener("click", () => {
     chrome.storage.sync.get("blockedKeywords", ({ blockedKeywords }) => {
-      const blob = new Blob([blockedKeywords.join(", ")], { type: 'text/plain' });
+      const keywordsContent = blockedKeywords.join(", ");
+      const blob = new Blob([keywordsContent], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
+
+      // Create a link to download the keyword file
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'blockedKeywords.txt';
+      a.download = 'blocked_keywords.txt';
       a.click();
+
+      // Cleanup
       URL.revokeObjectURL(url);
     });
   });
 
-  // Trigger import file dialog
-  importButton.addEventListener('click', () => {
-    importFile.click();
+  // Trigger the file input to import keywords
+  importButton.addEventListener("click", () => {
+    importFileInput.click();
   });
 
-  // Handle imported file
-  importFile.addEventListener('change', (event) => {
+  // Handle importing keywords from a file
+  importFileInput.addEventListener("change", (event) => {
     const file = event.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = () => {
-        const newKeywords = reader.result.split(",").map(kw => kw.trim()).filter(Boolean);
-        chrome.storage.sync.set({ blockedKeywords: newKeywords }, () => {
-          keywordsTextArea.value = newKeywords.join(", ");
-          // Notify content script to update keywords
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0].id) {
-              chrome.tabs.sendMessage(tabs[0].id, { action: "updateKeywords" });
-            }
-          });
-          status.textContent = "Keywords imported successfully!";
-          setTimeout(() => { status.textContent = ''; }, 2000);
+      reader.onload = (e) => {
+        const importedKeywords = e.target.result.split(",").map(kw => kw.trim()).filter(kw => kw.length > 0);
+        chrome.storage.sync.set({ blockedKeywords: importedKeywords }, () => {
+          keywordsTextArea.value = importedKeywords.join(", ");
+          statusMessage.textContent = "Keywords imported successfully!";
+          statusMessage.style.color = "green";
+          setTimeout(() => {
+            statusMessage.textContent = "";
+          }, 3000);
         });
       };
       reader.readAsText(file);
     }
+  });
+
+  // Export logs to a text file
+  exportLogsButton.addEventListener("click", () => {
+    chrome.storage.local.get({ logs: [] }, ({ logs }) => {
+      const logContent = logs.join('\n');
+      const blob = new Blob([logContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+
+      // Create a link to download the log file
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'head_in_the_sand_logs.txt';
+      a.click();
+
+      // Cleanup
+      URL.revokeObjectURL(url);
+    });
   });
 });
